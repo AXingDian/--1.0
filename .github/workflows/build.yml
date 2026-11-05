@@ -34,16 +34,25 @@ jobs:
         working-directory: RecipeApp
         run: ./gradlew assembleDebug --no-daemon
 
-      # 关键改动：打印出所有生成的 APK 文件，方便在日志里看到底叫啥名字
-      - name: Show generated APK files
+      # 1. 暴力搜索整个项目里的 apk 文件，并把它们的路径打印在日志里
+      - name: Print all APK paths
         run: |
-          echo "查找所有生成的 APK 文件："
-          find RecipeApp -name "*.apk"
+          echo "====== 正在搜索所有的 APK 文件 ======"
+          find . -name "*.apk" || echo "没有找到任何 apk"
+          echo "====== 搜索结束 ======"
 
-      # 关键改动：使用通配符 ** 搜索所有 apk 文件，如果没找到只报警告，不中断流程
-      - name: Upload APK artifact
+      # 2. 尝试上传标准的 APK（如果存在）
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: RecipeApp/**/*.apk
-          if-no-files-found: warn
+          name: app-debug-apk
+          path: RecipeApp/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore  # 找不到也不报错，让流程走完
+
+      # 3. 终极兜底：把整个 debug 构建目录全部打包上传（如果里面有 APK，这里一定找得到）
+      - name: Upload entire debug folder as fallback
+        uses: actions/upload-artifact@v4
+        with:
+          name: entire-debug-folder
+          path: RecipeApp/app/build/outputs/apk/debug/
+          if-no-files-found: ignore
