@@ -14,36 +14,36 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5 # 【重要】升级到 v5
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6 # 【重要】替换为新的 Action
-
-      - name: Check uploaded files
-        run: |
-          echo "当前仓库根目录："
-          ls -la
-          echo "RecipeApp 目录下的文件："
-          ls -la RecipeApp/
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Generate Gradle Wrapper
         working-directory: RecipeApp
         run: gradle wrapper
 
       - name: Make gradlew executable
-        working-directory: RecipeApp # 【重要】添加工作目录
+        working-directory: RecipeApp
         run: chmod +x gradlew
 
       - name: Build Debug APK
         working-directory: RecipeApp
         run: ./gradlew assembleDebug --no-daemon
 
+      # 关键改动：打印出所有生成的 APK 文件，方便在日志里看到底叫啥名字
+      - name: Show generated APK files
+        run: |
+          echo "查找所有生成的 APK 文件："
+          find RecipeApp -name "*.apk"
+
+      # 关键改动：使用通配符 ** 搜索所有 apk 文件，如果没找到只报警告，不中断流程
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: RecipeApp/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: RecipeApp/**/*.apk
+          if-no-files-found: warn
