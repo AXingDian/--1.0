@@ -19,15 +19,128 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build with Gradle
-        working-directory: RecipeApp
-        # 【核心魔法】末尾的 "|| true" 意思是：不管 gradle 报什么错，都假装成功，继续往下走！
+      - name: Generate Clean Android Project Automatically
         run: |
-          gradle assembleDebug --no-daemon || true
-          echo "构建流程强制结束，准备提取文件"
+          # 1. 在全新的 AndroidBuild 目录下建标准文件夹
+          mkdir -p AndroidBuild/app/src/main/java/com/example/recipeapp
+          mkdir -p AndroidBuild/app/src/main/res/values
+          mkdir -p AndroidBuild/app/src/main/res/drawable
+          mkdir -p AndroidBuild/app/src/main/assets
+          cd AndroidBuild
 
-      - name: Upload Outputs
+          # 2. 全盘搜索你上传的 index.html，并把它抓过来！
+          FOUND_HTML=$(find .. -name "index.html" | head -n 1)
+          if [ -n "$FOUND_HTML" ]; then
+            cp "$FOUND_HTML" app/src/main/assets/index.html
+            echo "✅ 找到你的 index.html 并塞入应用包！"
+          else
+            echo "<h1>Hello World</h1>" > app/src/main/assets/index.html
+            echo "⚠️ 没找到 index.html，使用默认页面。"
+          fi
+
+          # 3. 自动写入全套配置文件
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "RecipeApp"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.example.recipeapp"
+              compileSdk = 34
+              defaultConfig {
+                  applicationId = "com.example.recipeapp"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0.0"
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.appcompat:appcompat:1.6.1")
+              implementation("androidx.activity:activity-ktx:1.8.2")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application android:allowBackup="true" android:icon="@drawable/ic_launcher" android:label="菜谱助手" android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/recipeapp/MainActivity.kt
+          package com.example.recipeapp
+          import android.os.Bundle
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
+          import androidx.appcompat.app.AppCompatActivity
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val webView = WebView(this)
+                  webView.settings.javaScriptEnabled = true
+                  webView.settings.domStorageEnabled = true
+                  webView.webViewClient = WebViewClient()
+                  webView.loadUrl("file:///android_asset/index.html")
+                  setContentView(webView)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#FF7043" android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">菜谱助手</string>
+          </resources>
+          EOF
+          
+          # 生成 Gradle 运行脚本
+          gradle wrapper
+
+      - name: Build Debug APK
+        working-directory: AndroidBuild
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MyApp-APK
-          path: RecipeApp/app/build
+          name: Recipe-App-APK
+          path: AndroidBuild/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
