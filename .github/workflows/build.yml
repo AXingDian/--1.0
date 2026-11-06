@@ -22,22 +22,21 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Generate Gradle Wrapper
-        working-directory: RecipeApp
-        run: gradle wrapper
-
-      - name: Make gradlew executable
-        working-directory: RecipeApp
-        run: chmod +x gradlew
-
+      # 直接使用云端自带的 gradle，彻底避开 gradlew 权限和脚本格式问题
       - name: Build Debug APK
         working-directory: RecipeApp
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
-      # 强制把整个 debug 输出目录打包，只要有 APK，就一定在里面
-      - name: Upload debug folder
+      # 强制全盘搜索所有的 .apk 文件，并打印在日志里
+      - name: Find all APK files
+        run: |
+          echo "开始搜索 APK 文件..."
+          find . -name "*.apk"
+
+      # 使用双星号 ** 递归匹配所有的 APK，上传整个输出的文件夹
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-folder
-          path: RecipeApp/app/build/outputs/
+          name: app-debug
+          path: RecipeApp/app/build/outputs/apk/debug/**
           if-no-files-found: warn
